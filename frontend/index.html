@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Task Scheduler</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f9f9f9;
+      margin: 0;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      color: #25D366;
+      margin-bottom: 1.5rem;
+    }
+
+    form {
+      background-color: #ffffff;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 600px;
+    }
+
+    #tasks > div {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 1rem;
+      position: relative;
+    }
+
+    input {
+      padding: 0.6rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+
+    .task-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+    }
+
+    button {
+      margin-top: 1rem;
+      padding: 0.7rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    button[type="button"] {
+      background-color: #ededed;
+      color: #333;
+    }
+
+    button[type="submit"] {
+      background-color: #25D366;
+      color: white;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    @media (max-width: 500px) {
+      input {
+        font-size: 0.9rem;
+      }
+
+      form {
+        padding: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>WhatsApp Task Scheduler</h1>
+  
+  <!-- Excel Upload Section -->
+  <div style="background-color: #ffffff; padding: 2rem; border-radius: 12px; box-shadow: 0 0 15px rgba(0, 0, 0, 0.1); width: 100%; max-width: 600px; margin-bottom: 2rem;">
+    <h3 style="margin-top: 0; color: #333;">Upload Excel File</h3>
+    <p style="color: #666; margin-bottom: 1rem;">Excel should have 3 columns: Task, Mobile Number, Date & Time</p>
+    <input type="file" id="excelFile" accept=".xlsx,.xls" style="margin-bottom: 1rem;" />
+    <button type="button" onclick="processExcel()" style="background-color: #007bff; color: white;">Load from Excel</button>
+    <button type="button" onclick="clearTasks()" style="background-color: #dc3545; color: white; margin-left: 0.5rem;">Clear All Tasks</button>
+  </div>
+
+  <form id="taskForm">
+    <div id="tasks"></div>
+    <button type="button" onclick="addTask()">Add Task</button>
+    <button type="submit">Submit All</button>
+  </form>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script>
+    function addTask(message = '', to = '', time = '') {
+      const taskHTML = document.createElement('div');
+      taskHTML.innerHTML = `
+        <input name="message" placeholder="Message" value="${message}" required />
+        <input name="to" placeholder="Phone Number (with +91...)" value="${to}" required />
+        <input type="datetime-local" name="time" value="${time}" required />
+        <div class="task-buttons">
+          <button type="button" onclick="deleteTask(this)">Delete</button>
+        </div>
+      `;
+      document.getElementById('tasks').appendChild(taskHTML);
+    }
+
+    function deleteTask(button) {
+      const taskDiv = button.closest('div'); // button's direct container
+      const taskContainer = taskDiv.parentElement; // full task block
+      taskContainer.remove();
+    }
+
+    function clearTasks() {
+      document.getElementById('tasks').innerHTML = '';
+    }
+
+    function processExcel() {
+      const fileInput = document.getElementById('excelFile');
+      const file = fileInput.files[0];
+      
+      if (!file) {
+        alert('Please select an Excel file first!');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+          
+          // Clear existing tasks
+          clearTasks();
+          
+          // Skip header row (index 0) and process data rows
+          for (let i = 1; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            if (row.length >= 3 && row[0] && row[1] && row[2]) {
+              const message = row[0].toString();
+              const phoneNumber = row[1].toString();
+              let dateTime = '';
+              
+              // Handle different date formats
+              if (typeof row[2] === 'number') {
+                // Excel date serial number
+                const excelDate = XLSX.SSF.parse_date_code(row[2]);
+                const date = new Date(excelDate.y, excelDate.m - 1, excelDate.d, excelDate.H || 0, excelDate.M || 0);
+                dateTime = date.toISOString().slice(0, 16);
+              } else if (row[2] instanceof Date) {
+                dateTime = row[2].toISOString().slice(0, 16);
+              } else {
+                // Try to parse as string
+                const parsedDate = new Date(row[2]);
+                if (!isNaN(parsedDate.getTime())) {
+                  dateTime = parsedDate.toISOString().slice(0, 16);
+                }
+              }
+              
+              addTask(message, phoneNumber, dateTime);
+            }
+          }
+          
+          alert(`Successfully loaded ${jsonData.length - 1} tasks from Excel!`);
+        } catch (error) {
+          console.error('Error processing Excel file:', error);
+          alert('Error processing Excel file. Please check the format and try again.');
+        }
+      };
+      
+      reader.readAsArrayBuffer(file);
+    }
+
+    document.getElementById('taskForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const inputs = Array.from(document.querySelectorAll('#tasks > div'));
+      const tasks = inputs.map(div => {
+        const [message, to, time] = div.querySelectorAll('input');
+        return {
+          message: message.value,
+          to: to.value,
+          time: time.value
+        };
+      });
+
+      await fetch('http://localhost:5000/api/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tasks })
+      });
+
+      alert('Tasks Scheduled!');
+    });
+
+    // Add one default task
+    addTask();
+  </script>
+</body>
+</html>
