@@ -50,6 +50,7 @@ app.post('/api/schedule', (req, res) => {
   }
 
   tasks.forEach(scheduleMessage);
+  console.log('📅 Scheduled tasks:', tasks.length);
   res.json({ message: 'Tasks scheduled successfully!' });
 });
 
